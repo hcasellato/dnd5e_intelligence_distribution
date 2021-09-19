@@ -7,16 +7,17 @@
 repo <- "http://cran.us.r-project.org"
 
 # Required packages:
-if(!require(data.table))    install.packages("data.table",   repos = repo)
-if(!require(tidyverse))     install.packages("tidyverse",    repos = repo)
-if(!require(caret))         install.packages("caret",        repos = repo)
-if(!require(dplyr))         install.packages("dplyr",        repos = repo)
+if(!require(data.table)) install.packages("data.table", repos = repo, dependencies = TRUE)
+if(!require(tidyverse))  install.packages("tidyverse",  repos = repo, dependencies = TRUE)
+if(!require(caret))      install.packages("caret",      repos = repo, dependencies = TRUE)
+if(!require(dplyr))      install.packages("dplyr",      repos = repo, dependencies = TRUE)
 
 library(data.table)
 library(tidyverse)
 library(caret)
 library(dplyr)
 
+rm(repo)
 ### Basic data sets: ###########################################################
 # When analyzing various IQ tests and subtests, mainly the WAIS-IV, it can be 
 # implied that some abilities can be related to them.
@@ -25,20 +26,21 @@ library(dplyr)
 # Charisma can be related to vocabulary reasoning.
 #
 A <- 10000
-B <- 20000
 
 # Dice simulation
 set.seed(2021, sample.kind = "Rounding")
-raw_die <- replicate(B, {
+raw_die <- replicate(2*A, {
         dice <- sample(c(1:6), 4, replace = TRUE)
         dice <- dice[order(dice)][2:4]
         sum(dice)
 })
 
 set.seed(2021, sample.kind = "Rounding")
-dice_index <- createDataPartition(raw_dice, list = FALSE)
-int_dice   <- as.numeric(raw_dice[dice_index])
-cha_dice   <- as.numeric(raw_dice[-dice_index])
+dice_index <- createDataPartition(raw_die, list = FALSE)
+int_die   <- as.numeric(raw_die[dice_index])
+cha_die   <- as.numeric(raw_die[-dice_index])
+
+rm(raw_die, dice_index)
 
 ### Races with intelligence modifiers according to the Player's Handbook races
 # (+2) = Gnome 
@@ -76,15 +78,17 @@ race_table <- data.table(Race    = races,
                          Cha_inc = c(0,0,1,2,2,1,0))
 
 # Race with dice and modifiers after increase
-race_dice <- bind_cols(race, int_dice, cha_dice)
-colnames(race_dice) <- c("Race", "Int_dice", "Cha_dice")
-race_dice <- inner_join(race_dice, race_table, by = "Race") %>%
-             rowwise() %>%
-             mutate(Int_total = sum(c(Int_dice, Int_inc)),
-                    Cha_total = sum(c(Cha_dice, Cha_inc)),
-                    Int_mod   = floor((Int_total - 10)/2),
-                    Cha_mod   = floor((Cha_total - 10)/2))
-race_dice <- race_dice[,c(1,6,7,8,9)]
+race_die <- bind_cols(race, int_die, cha_die)
+colnames(race_die) <- c("Race", "Int_die", "Cha_die")
+race_die <- inner_join(race_die, race_table, by = "Race") %>%
+            rowwise() %>%
+            mutate(Int_total = sum(c(Int_die, Int_inc)),
+                   Cha_total = sum(c(Cha_die, Cha_inc)),
+                   Int_mod   = floor((Int_total - 10)/2),
+                   Cha_mod   = floor((Cha_total - 10)/2))
+character_die <- race_die[,c(1,6,7,8,9)]
+
+rm(race_table, race_prob, race_die)
 
 ### Backgrounds
 backgrounds <- c("Acolyte", "Charlatan", "Criminal / Spy", "Entertainer",
@@ -103,19 +107,36 @@ background_table <- data.table(Background    = backgrounds,
                                Persuasion    = c(0,0,0,0,0,0,1,0,1,1,0,0,0,0,0,0),
                                Religion      = c(1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0))
 
-# I know this is stupid, but I've already wrote all backgrounds, I'm tired and 
-# it was easier just to write this next lines =(
-# background_table <- background_table[-which(rowSums(background_table[,2:10]) == 0),]
-
 set.seed(2021, sample.kind = "Rounding")
 background_list <- sample(backgrounds, A, replace = TRUE)
 
-# Bind the background to the race_dice table
+# Bind the background to the character_die table
 # Adding an ID column
 character_id <- seq(1,A,1)
-race_dice_back <- bind_cols(character_id, race_dice, background_list)
-colnames(race_dice_back) <- c("Character_ID", "Race", "Int_total", "Cha_total", 
+character_die <- bind_cols(character_id, character_die, background_list)
+colnames(character_die) <- c("Character_ID", "Race", "Int_total", "Cha_total", 
                               "Int_mod", "Cha_mod", "Background")
+character_die <- inner_join(character_die, background_table, by = "Background")
+
+rm(background_table)
+
+### Classes
+classes <- c("Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin",
+             "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # All proficiencies added based on the Background:
 race_dice_back <- inner_join(race_dice_back, background_table, by = "Background") %>%
@@ -132,7 +153,7 @@ race_dice_back <- inner_join(race_dice_back, background_table, by = "Background"
 
 ### "Exam": ####################################################################
 # The general intelligence exam in the D&D world, related to IQ, could be divided
-# by proficiency subtests
+# by proficiency subtests.
 # 
 # Hypothetically, the characters would have an exam with questions assigned to 
 # each proficiency:
