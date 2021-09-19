@@ -116,30 +116,72 @@ character_id <- seq(1,A,1)
 character_die <- bind_cols(character_id, character_die, background_list)
 colnames(character_die) <- c("Character_ID", "Race", "Int_total", "Cha_total", 
                               "Int_mod", "Cha_mod", "Background")
-character_die <- inner_join(character_die, background_table, by = "Background")
 
-rm(background_table)
+# character_die <- inner_join(character_die, background_table, by = "Background")
+# rm(background_table)
 
 ### Classes
 classes <- c("Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin",
              "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard")
 
-#BBBBBBBBBBBBB
+class_table <- data.table(Class         = classes,
+                          Arcana        = c(0,1,0,1,0,0,0,0,0,1,1,1),
+                          Deception     = c(0,1,0,0,0,0,0,0,1,1,1,0),
+                          History       = c(0,1,1,0,1,1,0,0,0,0,1,1),
+                          Intimidation  = c(1,1,0,0,1,0,1,0,1,1,1,0),
+                          Investigation = c(0,1,0,0,0,0,0,1,1,0,1,1),
+                          Nature        = c(1,1,0,1,0,0,0,1,0,0,1,0),
+                          Performance   = c(0,1,0,0,0,0,0,0,1,0,0,0),
+                          Persuasion    = c(0,1,1,0,0,0,1,0,1,1,0,0),
+                          Religion      = c(0,1,1,1,0,1,1,0,0,1,1,1),
+                          # This will be useful for probability calculations:
+                          Other         = c(4,9,2,5,6,4,3,7,6,1,0,2), 
+                          Choose        = c(2,3,2,2,2,2,2,3,4,2,2,2))
+
+set.seed(2021, sample.kind = "Rounding")
+class_list <- sample(classes, A, replace = TRUE)
+
+character_die <- bind_cols(character_die, class_list)
+colnames(character_die)[8] <- c("Class")
+
+bc_table <- character_die[,c(7:8)]
+
+b_table  <- inner_join(bc_table, background_table, by = "Background")[,4:12]
+c_table  <- inner_join(bc_table, class_table, by = "Class")[,4:12]
+co_table <- inner_join(bc_table, class_table, by = "Class")[,13:14]
+
+bc_f <- c_table - b_table
+bc_f[bc_f < 0] <- 0
+
+bc_f <- bind_cols(bc_f, co_table)
+
+prof <- colnames(bc_f)[2:11]
+
+prof_choice <- function(x){
+  s_prof <- colnames(bc_f[x,which(bc_f[x,-11] > 0)])
+  s_prof <- s_prof[-length(s_prof)]
+  other_c <- rep("Other", times = bc_f[x,"Other"])
+  l_prof <- c(s_prof, other_c)
+  
+  sample(l_prof,bc_f[x,"Choose"])
+}
+
+set.seed(2021, sample.kind = "Rounding")
+sel_prof <- sapply(seq(1,A), prof_choice)
+sel_prof <- sapply(seq(1,A), function(x){table(sel_prof[[x]])})
+sel_prof <- as.data.frame(bind_rows(sel_prof))[,-1]
+
+sel_prof[is.na(sel_prof)] <- 0
+sel_prof <- sel_prof[,order(names(sel_prof))]
 
 
+bc_table <- as.data.frame(sapply(seq(1,A), function(x){sel_prof[x,] + b_table[x,]}))
+bc_table <- as.data.frame(t(bc_table))
+bc_table <- bind_cols(character_id,bc_table)
+colnames(bc_table)[1] <- c("Character_ID")
 
-
-
-
-
-
-
-
-
-
-
-# All proficiencies added based on the Background:
-race_dice_back <- inner_join(race_dice_back, background_table, by = "Background") %>%
+# All proficiencies added based on the Background, then based on class:
+character_die <-  inner_join(character_die, bc_table, by = "Character_ID") %>%
                   rowwise() %>%
                   mutate(Arcana        = Int_mod + (2*Arcana),
                          Deception     = Cha_mod + (2*Deception),
