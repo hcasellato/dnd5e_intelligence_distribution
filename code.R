@@ -1,8 +1,7 @@
 ### Code Summary: ##############################################################
-# 
-# 
-# 
-# 
+# This code creates a dataset of D&D characters and their exam scores.
+# Also has other data such as: background, class, proficiencies, etc.
+#
 ### Basic packages: ############################################################
 repo <- "http://cran.us.r-project.org"
 
@@ -25,7 +24,9 @@ rm(repo)
 # Intelligence can be related to general reasoning and memory; and
 # Charisma can be related to vocabulary reasoning.
 #
-A <- 10000
+
+# Number of observations:
+A <- 50000
 
 # Dice simulation
 set.seed(2021, sample.kind = "Rounding")
@@ -117,10 +118,10 @@ character_die <- bind_cols(character_id, character_die, background_list)
 colnames(character_die) <- c("Character_ID", "Race", "Int_total", "Cha_total", 
                               "Int_mod", "Cha_mod", "Background")
 
-# character_die <- inner_join(character_die, background_table, by = "Background")
-# rm(background_table)
+
 
 ### Classes
+# Create class table with proficiencies
 classes <- c("Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin",
              "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard")
 
@@ -137,19 +138,29 @@ class_table <- data.table(Class         = classes,
                           # This will be useful for probability calculations:
                           Other         = c(4,9,2,5,6,4,3,7,6,1,0,2), 
                           Choose        = c(2,3,2,2,2,2,2,3,4,2,2,2))
-
+# Class list
 set.seed(2021, sample.kind = "Rounding")
 class_list <- sample(classes, A, replace = TRUE)
 
+# Append classes to the character table
 character_die <- bind_cols(character_die, class_list)
 colnames(character_die)[8] <- c("Class")
 
+# Create a table of only class and background
 bc_table <- character_die[,c(7:8)]
 
-b_table  <- inner_join(bc_table, background_table, by = "Background")[,4:12]
-c_table  <- inner_join(bc_table, class_table, by = "Class")[,4:12]
-co_table <- inner_join(bc_table, class_table, by = "Class")[,13:14]
+# Separate tables in:
+# Background
+b_table  <- inner_join(bc_table, background_table, by = "Background")[,3:11]
 
+# Class
+c_table  <- inner_join(bc_table, class_table, by = "Class")[,3:11] 
+
+# "Choose" and "Other" columns from class_table
+co_table <- inner_join(bc_table, class_table, by = "Class")[,12:13] 
+
+# This next chunk is a way of discovering available proficiencies for a character
+# negating the intersection between background prof. and class prof.
 bc_f <- c_table - b_table
 bc_f[bc_f < 0] <- 0
 
@@ -180,7 +191,7 @@ bc_table <- as.data.frame(t(bc_table))
 bc_table <- bind_cols(character_id,bc_table)
 colnames(bc_table)[1] <- c("Character_ID")
 
-# All proficiencies added based on the Background, then based on class:
+# All proficiencies added based on background and class:
 character_die <-  inner_join(character_die, bc_table, by = "Character_ID") %>%
                   rowwise() %>%
                   mutate(Arcana        = Int_mod + (2*Arcana),
@@ -193,6 +204,10 @@ character_die <-  inner_join(character_die, bc_table, by = "Character_ID") %>%
                          Persuasion    = Cha_mod + (2*Persuasion),
                          Religion      = Int_mod + (2*Religion))
 
+rm(b_table,background_table,bc_f,bc_table,c_table,class_table,co_table,sel_prof)
+rm(prof_choice)
+rm(background_list,backgrounds,cha_die,character_id,class_list,classes,int_die,
+   prof,race,races,A)
 ### "Exam": ####################################################################
 # The general intelligence exam in the D&D world, related to IQ, could be divided
 # by proficiency subtests.
@@ -209,8 +224,8 @@ character_die <-  inner_join(character_die, bc_table, by = "Character_ID") %>%
 # the appropriate modifier
 #
 
-int_ex <- race_dice_back[,c(1,8,10,12,13,16)]
-cha_ex <- race_dice_back[,c(1,9,11,14,15)]
+int_ex <- character_die[,c(1,9,11,13,14,17)]
+cha_ex <- character_die[,c(1,10,12,15,16)]
 
 # Intelligence subtest function
 int_test <- function(proficiency){
@@ -224,7 +239,7 @@ cha_test <- function(proficiency){
   mean(dice_cha)
 }
 
-# Exam Intelligence
+# Intelligence exam
 set.seed(2021, sample.kind = "Rounding")
 int_ex <- int_ex %>% mutate(Arcana        = int_test(Arcana),
                             History       = int_test(History),
@@ -236,7 +251,7 @@ int_mean <- as.data.table(round(rowMeans(int_ex[,2:6]),2))
 colnames(int_mean) <- c("Int_score")
 int_ex <- bind_cols(int_ex, int_mean)
 
-# Exam Charisma
+# Charisma exam
 set.seed(2021, sample.kind = "Rounding")
 cha_ex <- cha_ex %>% mutate(Deception    = int_test(Deception),
                             Intimidation = int_test(Intimidation),
@@ -252,14 +267,15 @@ set.seed(2021, sample.kind = "Rounding")
 full_exam <- inner_join(int_ex, cha_ex, by = "Character_ID")[,c(1,7,12)] %>%
              mutate(full_score = round(mean(c(Int_score, Cha_score)),2))
 
+# Appending exam scores to character_die table
+character_die <- inner_join(character_die, full_exam, by = "Character_ID")
+rm(full_exam, cha_ex, int_ex, cha_mean, int_mean)
+rm(cha_test,int_test)
 
 # Full Exam Histogram
-full_exam %>% ggplot() +
-              geom_histogram(aes(full_score), fill = "#64242e") +
-              scale_x_continuous(breaks = 7:16) +
-              theme_bw()
+character_die %>% ggplot() +
+                  geom_histogram(aes(full_score), fill = "#64242e") +
+                  scale_x_continuous(breaks = 7:16) +
+                  theme_bw()
 
-# Full Exam Quantiles
-quantile(full_exam$full_score, probs = c(.001, .02, .16, .50, .84, .98, .999))
-
-
+# write.csv(character_die, file="character_info")
