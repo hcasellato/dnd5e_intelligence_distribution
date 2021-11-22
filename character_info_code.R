@@ -248,7 +248,7 @@ int_ex <- int_ex %>% mutate(Arcana        = int_test(Arcana),
                             Religion      = int_test(Religion))
 
 int_mean <- as.data.table(round(rowMeans(int_ex[,2:6]),2))
-colnames(int_mean) <- c("Int_score")
+colnames(int_mean) <- c("int_score")
 int_ex <- bind_cols(int_ex, int_mean)
 
 # Charisma exam
@@ -259,13 +259,13 @@ cha_ex <- cha_ex %>% mutate(Deception    = int_test(Deception),
                             Persuasion   = int_test(Persuasion))
 
 cha_mean <- as.data.table(round(rowMeans(cha_ex[,2:5]),2))
-colnames(cha_mean) <- c("Cha_score")
+colnames(cha_mean) <- c("cha_score")
 cha_ex <- bind_cols(cha_ex, cha_mean)
 
 # Final exam table
 set.seed(2021, sample.kind = "Rounding")
 full_exam <- inner_join(int_ex, cha_ex, by = "Character_ID")[,c(1,7,12)] %>%
-             mutate(full_score = round(mean(c(Int_score, Cha_score)),2))
+             mutate(full_score = round(mean(c(int_score, cha_score)),2))
 
 # Appending exam scores to character_die table
 character_die <- inner_join(character_die, full_exam, by = "Character_ID")
